@@ -43,6 +43,14 @@ PRESET_MOBILI = {
     "WC sospeso": {"larghezza": 37, "profondita": 55, "altezza": 40, "forma": "box", "muro": True, "quota": 0},
     "Bidet sospeso": {"larghezza": 37, "profondita": 55, "altezza": 40, "forma": "box", "muro": True, "quota": 0},
     "Termoarredo": {"larghezza": 50, "profondita": 8, "altezza": 120, "forma": "box", "muro": True},
+    # elementi A PARETE: "quota" = altezza da terra del bordo basso (cm)
+    "Specchio": {"larghezza": 80, "profondita": 2, "altezza": 70, "forma": "box", "muro": True, "quota": 105},
+    "Specchio retroilluminato": {"larghezza": 80, "profondita": 3, "altezza": 70, "forma": "box", "muro": True,
+                                 "quota": 105, "led": True},
+    "Pensile bagno": {"larghezza": 60, "profondita": 22, "altezza": 60, "forma": "box", "muro": True, "quota": 125},
+    "Mensola": {"larghezza": 60, "profondita": 20, "altezza": 3, "forma": "box", "muro": True, "quota": 110},
+    "Colonna bagno": {"larghezza": 35, "profondita": 32, "altezza": 160, "forma": "box", "muro": True, "quota": 20},
+    "Applique": {"larghezza": 10, "profondita": 10, "altezza": 22, "forma": "box", "muro": True, "quota": 165},
 }
 
 TIPI_FISSI = {"porta": (40, 60, 110), "finestra": (235, 200, 120), "porta-finestra": (235, 200, 120),
@@ -222,6 +230,9 @@ def _costruisci(dati):
 
     stanza["fissi"] = [f for f in (_fisso(stanza, f) for f in dati.get("fissi", [])) if f]
     stanza["mobili"] = [_mobile(stanza, m) for m in dati.get("mobili", [])]
+    # luci scelte dall'impresa (faretti, plafoniere, sospensioni) e atmosfera del render
+    stanza["luci"] = [l for l in dati.get("luci", []) if isinstance(l, dict) and l.get("centro")]
+    stanza["atmosfera"] = dati.get("atmosfera", "giorno")
     stanza["misure"] = {"larghezza_m": round(XR - XL, 2), "profondita_m": round(ZW - ZB, 2),
                         "altezza_m": round(stanza["H"], 2), "superficie_mq": round((XR - XL) * (ZW - ZB), 1),
                         "scarto_angoli_cm": round(100 * float(np.mean(scarti)), 1),
@@ -308,7 +319,7 @@ def _mobile(s, m):
     if m.get("muro") and m.get("forma", "box") == "box":
         # parete più vicina: il lato "profondità" diventa perpendicolare alla parete
         distanze = {"sinistra": cx - s["XL"], "destra": s["XR"] - cx, "dietro": cz - s["ZB"], "fondo": s["ZW"] - cz}
-        parete = min(distanze, key=distanze.get)
+        parete = m["parete"] if m.get("parete") in distanze else min(distanze, key=distanze.get)
         rot = {"fondo": 0, "dietro": 180, "sinistra": 270, "destra": 90}[parete]
         g = 0.01
         if parete == "fondo":
@@ -392,4 +403,6 @@ def serializza(s):
     out = {k: s[k] for k in ("h", "theta", "XL", "XR", "ZB", "ZW", "H", "misure", "avvisi")}
     out["fissi"] = s["fissi"]
     out["mobili"] = [{k: v for k, v in m.items()} for m in s["mobili"]]
+    out["luci"] = s.get("luci", [])
+    out["atmosfera"] = s.get("atmosfera", "giorno")
     return out

@@ -700,3 +700,21 @@ button.cat-img { border: none; padding: 0; cursor: zoom-in; }
 .dettagli-zone .righe-zone { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 
 .suggerimento.attenzione { background: #fdf0e3; border: 1px solid #f0c99a; }
+
+/* elementi a parete e luci (passo Arredo dei progetti 3D) */
+.parete-luci { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.parete-luci[hidden] { display: none; }
+.gruppo-elementi { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.gruppo-elementi .etichetta-piccola { width: 100%; }
+.gruppo-elementi > button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--linea); background: var(--carta); cursor: pointer; }
+.gruppo-elementi > button.magico-piccolo { border-color: #d9c3a5; background: #faf3e8; }
+.luci-elenco { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pv-luce { fill: #ffd75e; stroke: #b48a1e; stroke-width: 1.5; cursor: grab; }
+.pareti-arredo { margin-top: 12px; }
+.pareti-arredo svg { width: 100%; height: auto; background: #fbfaf8; border-radius: 10px; border: 1px solid var(--linea); touch-action: none; }
+.el-parete { cursor: ew-resize; }
+.el-parete.sospeso { cursor: move; }
+
+[data-solo-cat][hidden] { display: none; }
+label.spunta { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 13px; }
+label.spunta input { width: auto; }

@@ -648,6 +648,89 @@ def apri(pareti, fissi):
 
 # ------------------------------------------------------------------ mobili e sanitari a misura
 
+CI_SONO_SPECCHI = any("specchio" in f"{m.get('nome', '')} {m.get('tipo', '')}".lower() for m in SCENA.get("mobili", []))
+# temperatura della luce (Kelvin) -> colore
+COLORE_K = {2700: (1.0, 0.76, 0.52), 3000: (1.0, 0.82, 0.62), 3500: (1.0, 0.87, 0.72), 4000: (1.0, 0.92, 0.82),
+            5000: (1.0, 0.97, 0.93)}
+
+
+def colore_k(k):
+    k = min(COLORE_K, key=lambda x: abs(x - int(k or 3000)))
+    return COLORE_K[k]
+
+
+def materiale_specchio():
+    if "specchio" not in _materiali:
+        _materiali["specchio"] = principled("specchio", "#ffffff", ruvidita=0.0, metallo=1.0)
+    return _materiali["specchio"]
+
+
+def materiale_luce(nome, colore_rgb, forza):
+    """Superficie che si vede accesa (diffusore, striscia LED)."""
+    m = bpy.data.materials.new(nome)
+    m.use_nodes = True
+    nt = m.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    e = nt.nodes.new("ShaderNodeEmission")
+    e.inputs["Color"].default_value = (*colore_rgb, 1.0)
+    e.inputs["Strength"].default_value = forza
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    nt.links.new(e.outputs["Emission"], out.inputs["Surface"])
+    return m
+
+
+def elemento_a_parete(nome, m, c, L, P, A, q):
+    """Specchi, applique, mensole, pensili, colonne: appesi alla parete (retro su +Y), bordo basso a 'q' da terra."""
+    if "specchio" in nome:
+        luce = m.get("luce_specchio") or ("dietro" if (m.get("led") or "retroillumin" in nome) else "")
+        led = luce == "dietro"
+        if luce == "sopra":
+            # lampada a barra sopra lo specchio, accesa verso il basso
+            larga = min(0.6, L * 0.6)
+            c("braccio_lampada", (0.04, 0.12, 0.02), (0, P / 2 - 0.06, q + A + 0.03), M_CROMO)
+            c("lampada", (larga, 0.05, 0.025), (0, -P / 2 - 0.06, q + A + 0.035), M_CROMO, 0.005)
+            striscia = c("led_lampada", (larga - 0.02, 0.035, 0.004), (0, -P / 2 - 0.06, q + A + 0.0215),
+                         materiale_luce("lampada_specchio", colore_k(4000), 30))
+            # la luce vera, agganciata alla lampada (si muove con lo specchio)
+            bpy.ops.object.light_add(type="AREA", location=(0, 0, 0))
+            lamp = bpy.context.active_object
+            lamp.data.shape, lamp.data.size, lamp.data.size_y = "RECTANGLE", larga, 0.03
+            lamp.data.energy, lamp.data.color = 18, colore_k(4000)
+            lamp.parent = striscia
+            lamp.location = (0, 0, -0.006)
+            lamp.rotation_euler = (math.radians(25), 0, 0)
+        c("supporto", (L - 0.02, max(P - 0.006, 0.006), A - 0.02), (0, 0.003, q + A / 2), principled("supporto", "#2b2b2b", 0.6))
+        c("specchio", (L, 0.006, A), (0, -P / 2 + 0.003, q + A / 2), materiale_specchio(), 0.002)
+        if led:
+            # luce LED dietro lo specchio: alone sulla parete tutto intorno
+            striscia = materiale_luce("led_specchio", colore_k(4000), 25)
+            for nome_s, dim, pos in (("led_alto", (L - 0.06, 0.004, 0.01), (0, P / 2 - 0.004, q + A - 0.03)),
+                                     ("led_basso", (L - 0.06, 0.004, 0.01), (0, P / 2 - 0.004, q + 0.03)),
+                                     ("led_sx", (0.01, 0.004, A - 0.06), (-L / 2 + 0.03, P / 2 - 0.004, q + A / 2)),
+                                     ("led_dx", (0.01, 0.004, A - 0.06), (L / 2 - 0.03, P / 2 - 0.004, q + A / 2))):
+                c(nome_s, dim, pos, striscia)
+    elif "applique" in nome:
+        c("base_applique", (min(L, 0.08), 0.015, min(A, 0.12)), (0, P / 2 - 0.0075, q + A / 2), M_ACCENTO)
+        diffusore = c("diffusore", (L, P - 0.02, A), (0, -0.01, q + A / 2), materiale_luce("diffusore", colore_k(3000), 12), 0.02)
+        # la luce vera, appena davanti al diffusore (agganciata a lui: si muove con l'applique)
+        bpy.ops.object.light_add(type="POINT", location=(0, 0, 0))
+        luce = bpy.context.active_object
+        luce.data.energy = 6
+        luce.data.shadow_soft_size = 0.05
+        luce.data.color = colore_k(3000)
+        luce.parent = diffusore
+        luce.location = (0, -(P - 0.02) / 2 - 0.04, 0)
+    elif "mensola" in nome:
+        c("mensola", (L, P, max(A, 0.025)), (0, 0, q + max(A, 0.025) / 2),
+          legno("legno_mensola", F["legno_mobili"]["chiaro"], F["legno_mobili"]["scuro"]), 0.003)
+    else:
+        # pensile o colonna: scatola laccata con le ante (fuga sottile in mezzo se è larga)
+        c("corpo", (L, P, A), (0, 0, q + A / 2), M_LACCATO, 0.004)
+        if L > 0.45:
+            c("fuga_ante", (0.003, 0.002, A - 0.02), (0, -P / 2 - 0.001, q + A / 2), principled("fuga", "#5a5a5a", 0.6))
+
+
 def mobile(m):
     """Costruisce il mobile nel suo sistema locale (larghezza L lungo X, profondità P lungo Y,
     retro verso +Y, appoggio a terra Z = 0), poi lo ruota e lo mette al suo posto."""
@@ -665,11 +748,22 @@ def mobile(m):
 
     if m.get("modello"):
         try:
-            importa_modello(m["modello"], L, P, A, q, g, m.get("rotazione_modello", 0), m.get("scala_modello") == "esatte")
+            pezzi = importa_modello(m["modello"], L, P, A, q, g, m.get("rotazione_modello", 0), m.get("scala_modello") == "esatte")
+            if "specchio" in nome:
+                rendi_specchio(pezzi, radice, m.get("luce_specchio") or ("dietro" if m.get("led") else ""))
+            if m.get("luce"):
+                bpy.ops.object.light_add(type="POINT", location=(0, 0, 0))
+                luce = bpy.context.active_object
+                luce.data.energy, luce.data.shadow_soft_size, luce.data.color = 6, 0.05, colore_k(m.get("k", 3000))
+                luce.parent = g
+                luce.location = (0, -P / 2 - 0.05, q + A / 2)
             return radice
         except Exception as e:  # noqa: BLE001  modello illeggibile: si usa la forma a misura
             print(f"[PV] modello {m['modello']} non importato ({e}): forma a misura")
 
+    if any(k in nome for k in ("specchio", "applique", "mensola", "pensile", "colonna bagno")) and "mobile bagno" not in nome:
+        elemento_a_parete(nome, m, c, L, P, A, q)
+        return radice
     if "doccia" in nome:
         c("piatto", (L, P, 0.03), (0, 0, 0.015), M_CERAMICA, 0.01)
         # vetri sui lati che NON toccano una parete (si capisce dalla posizione nella stanza)
@@ -723,9 +817,9 @@ def mobile(m):
         taglia(piano, cut)
         c("rubinetto", (0.03, 0.14, 0.03), (0, P / 2 - 0.1, z0 + alto_mob + 0.12), M_CROMO)
         c("rubinetto_base", (0.04, 0.04, 0.12), (0, P / 2 - 0.05, z0 + alto_mob + 0.06), M_CROMO)
-        # specchio sopra il lavabo
-        c("specchio", (min(L, 0.9), 0.02, 0.7), (0, P / 2 + 0.01, z0 + alto_mob + 0.65),
-          principled("specchio", "#ffffff", ruvidita=0.0, metallo=1.0))
+        # specchio sopra il lavabo (solo se l'impresa non ne ha messo uno suo)
+        if not CI_SONO_SPECCHI:
+            c("specchio", (min(L, 0.9), 0.02, 0.7), (0, P / 2 + 0.01, z0 + alto_mob + 0.65), materiale_specchio())
     elif "termo" in nome or "scaldasalviette" in nome:
         for i in range(10):
             c(f"barra{i}", (L, 0.025, 0.02), (0, 0, 0.3 + i * (A - 0.3) / 10), M_ACCENTO)
@@ -771,7 +865,7 @@ def mobile(m):
     return radice
 
 
-def importa_modello(percorso, L, P, A, quota, genitore, rotazione=0, esatte=False):
+def importa_modello(percorso, L, P, A, quota, genitore, rotazione=0, esatte=False, sdraia=False):
     """Modello 3D del catalogo (GLB/GLTF/OBJ/FBX, del produttore o creato da Meshy) portato ESATTAMENTE alle misure
     del prodotto: larghezza L lungo X, profondità P lungo Y (fronte verso -Y, retro verso +Y), altezza A, a terra."""
     import mathutils
@@ -794,6 +888,17 @@ def importa_modello(percorso, L, P, A, quota, genitore, rotazione=0, esatte=Fals
         for o in radici:
             o.matrix_world = giro @ o.matrix_world
         bpy.context.view_layer.update()
+    if sdraia:
+        # luci a soffitto (plafoniere, faretti): il lato più sottile va in verticale, la faccia davanti verso il basso.
+        # Meshy, da una foto presa di fronte, le crea "in piedi" come una ruota.
+        pp = [o.matrix_world @ mathutils.Vector(v) for o in nuovi if o.type == "MESH" for v in o.bound_box]
+        d = [max(p[i] for p in pp) - min(p[i] for p in pp) for i in range(3)]
+        sottile = min(range(3), key=lambda i: d[i])
+        giro = {1: mathutils.Matrix.Rotation(math.pi / 2, 4, "X"), 0: mathutils.Matrix.Rotation(-math.pi / 2, 4, "Y")}.get(sottile)
+        if giro is not None:
+            for o in radici:
+                o.matrix_world = giro @ o.matrix_world
+            bpy.context.view_layer.update()
     punti = [o.matrix_world @ mathutils.Vector(v) for o in nuovi if o.type == "MESH" for v in o.bound_box]
     if not punti:
         raise ValueError("nessuna geometria nel file")
@@ -824,6 +929,99 @@ def importa_modello(percorso, L, P, A, quota, genitore, rotazione=0, esatte=Fals
     for o in nuovi:
         if o.type == "MESH":
             o.data.update()
+    return [o for o in nuovi if o.type == "MESH"]
+
+
+def accendi_diffusore(oggetti, colore_rgb):
+    """Plafoniere e faretti del catalogo: la parte di sotto (il diffusore) si vede accesa.
+    Si accendono le facce rivolte in giù dello strato più basso, lasciando fuori il bordo esterno."""
+    import collections
+    import mathutils
+    bpy.context.view_layer.update()
+    facce = []
+    for o in oggetti:
+        m3 = o.matrix_world.to_3x3()
+        for f in o.data.polygons:
+            if (m3 @ f.normal).normalized().z < -0.9:
+                facce.append((o, f, o.matrix_world @ f.center))
+    if not facce:
+        return
+    strati = collections.Counter()
+    for o, f, c in facce:
+        strati[round(c.z / 0.005)] += f.area
+    z_giu = strati.most_common(1)[0][0] * 0.005
+    xs = [c.x for _, _, c in facce]
+    ys = [c.y for _, _, c in facce]
+    cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+    raggio = 0.85 * max(max(xs) - min(xs), max(ys) - min(ys)) / 2
+    acceso = materiale_luce("diffusore_acceso", colore_rgb, 6)
+    for o, f, c in facce:
+        if abs(c.z - z_giu) < 0.008 and math.hypot(c.x - cx, c.y - cy) < raggio:
+            if acceso.name not in [m.name for m in o.data.materials if m]:
+                o.data.materials.append(acceso)
+            f.material_index = [m.name if m else "" for m in o.data.materials].index(acceso.name)
+
+
+def rendi_specchio(oggetti, radice, luce=""):
+    """Modello di uno specchio (es. creato da Meshy, che lo fa grigio e opaco): la superficie piatta più grande
+    rivolta verso la stanza diventa VETRO A SPECCHIO. luce: "sopra" = lampada sopra lo specchio (la parte che sporge
+    in alto si accende e illumina in giù), "dietro" = LED dietro (alone sulla parete), "" = nessuna."""
+    import collections
+    import mathutils
+    bpy.context.view_layer.update()
+    inv = radice.matrix_world.inverted()
+    giro = radice.matrix_world.to_3x3().normalized()
+    fronte, su = giro @ mathutils.Vector((0, -1, 0)), mathutils.Vector((0, 0, 1))
+    facce = []          # (oggetto, faccia, centro nel sistema del mobile, normale nel mondo)
+    for o in oggetti:
+        m3 = o.matrix_world.to_3x3()
+        for f in o.data.polygons:
+            facce.append((o, f, inv @ (o.matrix_world @ f.center), (m3 @ f.normal).normalized()))
+    davanti = [x for x in facce if x[3].dot(fronte) > 0.9]
+    if not davanti:
+        return
+    # profondità più "piena" di facce frontali = il vetro
+    strati = collections.Counter()
+    for o, f, c, n in davanti:
+        strati[round(c.y / 0.01)] += f.area * (o.matrix_world.to_scale().x * o.matrix_world.to_scale().z)
+    vetro_y = strati.most_common(1)[0][0] * 0.01
+    vetro = [x for x in davanti if abs(x[2].y - vetro_y) < 0.012]
+    mat = materiale_specchio()
+    for o, f, c, n in vetro:
+        if mat.name not in [m.name for m in o.data.materials if m]:
+            o.data.materials.append(mat)
+        f.material_index = [m.name if m else "" for m in o.data.materials].index(mat.name)
+    xs = [c.x for _, _, c, _ in vetro]
+    zs = [c.z for _, _, c, _ in vetro]
+    x0, x1, z0, z1 = min(xs), max(xs), min(zs), max(zs)
+    print(f"[PV] specchio: vetro {x1 - x0:.2f} x {z1 - z0:.2f} m, luce '{luce}'")
+    if luce == "sopra":
+        # la lampada: i pezzi sopra il bordo alto del vetro; la loro parte di sotto si accende
+        lampada = [x for x in facce if x[2].z > z1 + 0.01]
+        accesa = materiale_luce("lampada_specchio", colore_k(4000), 30)
+        for o, f, c, n in lampada:
+            if n.dot(su) < -0.3:
+                if accesa.name not in [m.name for m in o.data.materials if m]:
+                    o.data.materials.append(accesa)
+                f.material_index = [m.name if m else "" for m in o.data.materials].index(accesa.name)
+        lx = [c.x for _, _, c, _ in lampada] or [-(x1 - x0) / 4, (x1 - x0) / 4]
+        ly = [c.y for _, _, c, _ in lampada] or [vetro_y - 0.08]
+        lz = [c.z for _, _, c, _ in lampada] or [z1 + 0.04]
+        bpy.ops.object.light_add(type="AREA", location=(0, 0, 0))
+        l = bpy.context.active_object
+        l.data.shape, l.data.size, l.data.size_y = "RECTANGLE", max(0.1, max(lx) - min(lx)), 0.03
+        l.data.energy, l.data.color = 18, colore_k(4000)
+        l.parent = radice
+        l.location = ((min(lx) + max(lx)) / 2, min(ly), min(lz) - 0.01)
+        l.rotation_euler = (math.radians(25), 0, 0)          # guarda in giù, un po' verso la stanza
+    elif luce == "dietro":
+        dietro = max(c.y for _, _, c, _ in facce) - 0.004
+        striscia = materiale_luce("led_specchio", colore_k(4000), 25)
+        for nome_s, dim, pos in (("led_alto", (x1 - x0 - 0.06, 0.004, 0.01), ((x0 + x1) / 2, dietro, z1 - 0.03)),
+                                 ("led_basso", (x1 - x0 - 0.06, 0.004, 0.01), ((x0 + x1) / 2, dietro, z0 + 0.03)),
+                                 ("led_sx", (0.01, 0.004, z1 - z0 - 0.06), (x0 + 0.03, dietro, (z0 + z1) / 2)),
+                                 ("led_dx", (0.01, 0.004, z1 - z0 - 0.06), (x1 - 0.03, dietro, (z0 + z1) / 2))):
+            cubo(nome_s, dim, pos, striscia, genitore=radice)
 
 
 def lati_aperti(m):
@@ -884,7 +1082,30 @@ def luci(finestre):
     except AttributeError:
         pass
     nt.links.new(cielo.outputs["Color"], sfondo.inputs["Color"])
-    sfondo.inputs["Strength"].default_value = 0.25
+    sera = SCENA.get("atmosfera") == "sera"
+    sfondo.inputs["Strength"].default_value = 0.004 if sera else 0.25
+    if not sera:
+        # di giorno, guardando FUORI dalla finestra (dalla fotocamera o attraverso il vetro) si vede luce piena, quasi bianca:
+        # come nelle foto d'interni professionali. Nessuna vista inventata; la stanza resta illuminata dal cielo vero.
+        percorso = nt.nodes.new("ShaderNodeLightPath")
+        vista = nt.nodes.new("ShaderNodeMath")
+        vista.operation = "MAXIMUM"
+        nt.links.new(percorso.outputs["Is Camera Ray"], vista.inputs[0])
+        nt.links.new(percorso.outputs["Is Transmission Ray"], vista.inputs[1])
+        luminoso = nt.nodes.new("ShaderNodeBackground")
+        luminoso.inputs["Color"].default_value = (1.0, 0.985, 0.96, 1.0)
+        luminoso.inputs["Strength"].default_value = 4.0
+        misto = nt.nodes.new("ShaderNodeMixShader")
+        nt.links.new(vista.outputs[0], misto.inputs["Fac"])
+        nt.links.new(sfondo.outputs["Background"], misto.inputs[1])
+        nt.links.new(luminoso.outputs["Background"], misto.inputs[2])
+        uscita = next(n for n in nt.nodes if n.type == "OUTPUT_WORLD")
+        nt.links.new(misto.outputs["Shader"], uscita.inputs["Surface"])
+    if SCENA.get("luci"):
+        luci_scelte(SCENA["luci"], sera)
+        if not sera:
+            portali(finestre)
+        return
     # luci interne calde, sempre: in un 360 d'interni senza luce artificiale gli angoli diventano neri
     W, D = XR - XL, ZW - ZB
     righe = max(1, round(D / 1.4))
@@ -905,7 +1126,11 @@ def luci(finestre):
             except AttributeError:
                 l.cycles.visible_glossy = False
             cilindro("faretto", 0.04, 0.008, (x, y, H - 0.004), faretto_acceso())
-    # "portale" di luce sulle finestre: più luce naturale, meno rumore
+    portali(finestre)
+
+
+def portali(finestre):
+    """"Portale" di luce sulle finestre: più luce naturale, meno rumore."""
     import mathutils
     for (x, y, (nx, ny), zc, largo, alto) in finestre:
         bpy.ops.object.light_add(type="AREA", location=(x - nx * 0.05, y - ny * 0.05, zc))
@@ -916,6 +1141,78 @@ def luci(finestre):
         l.data.color = (1.0, 0.97, 0.94)
         # la luce guarda dentro la stanza (l'area emette lungo il suo -Z locale)
         l.rotation_euler = mathutils.Vector((-nx, -ny, 0.0)).to_track_quat("-Z", "Z").to_euler()
+
+
+def luci_scelte(elenco, sera):
+    """Le luci messe dall'impresa nella piantina. centro = [x, z] della stanza (metri), k = temperatura (Kelvin).
+    faretto = incasso a soffitto che illumina verso il basso; plafoniera = disco luminoso; sospensione = lampada appesa."""
+    forza = 1.0
+    for i, l in enumerate(elenco):
+        x, y = l["centro"]
+        col = colore_k(l.get("k", 3000))
+        tipo = l.get("tipo", "faretto")
+        if l.get("modello"):
+            bpy.ops.object.empty_add(location=(x, y, 0.0))
+            appiglio = bpy.context.active_object
+            A = l.get("A", 0.1)
+            basso = H - (l.get("calata", 70) / 100 if tipo == "sospensione" else A)
+            try:
+                pezzi = importa_modello(l["modello"], l.get("L", 0.1), l.get("P", 0.1), A, basso, appiglio,
+                                        l.get("rotazione_modello", 0), l.get("scala_modello") == "esatte",
+                                        sdraia=tipo in ("plafoniera", "faretto"))
+                if tipo in ("plafoniera", "faretto"):
+                    accendi_diffusore(pezzi, col)
+                if tipo == "sospensione":
+                    cilindro(f"filo{i}", 0.004, H - basso - A, (x, y, (H + basso + A) / 2), M_ACCENTO)
+                bpy.ops.object.light_add(type="SPOT" if tipo == "faretto" else ("AREA" if tipo == "plafoniera" else "POINT"),
+                                         location=(x, y, basso - 0.03))
+                luce = bpy.context.active_object
+                if tipo == "faretto":
+                    luce.data.spot_size, luce.data.spot_blend, luce.data.energy = math.radians(70), 0.6, 12 * forza
+                elif tipo == "plafoniera":
+                    luce.data.shape, luce.data.size, luce.data.energy = "DISK", max(0.1, l.get("L", 0.4)), 28 * forza
+                else:
+                    luce.data.shadow_soft_size, luce.data.energy = 0.06, 22 * forza
+                luce.data.color = col
+                continue
+            except Exception as e:  # noqa: BLE001  modello illeggibile: si usa la luce disegnata dal programma
+                print(f"[PV] luce {l.get('modello')} non importata ({e})")
+        if tipo == "plafoniera":
+            cilindro(f"plafoniera{i}", 0.2, 0.05, (x, y, H - 0.025), materiale_luce(f"plaf{i}", col, 6))
+            bpy.ops.object.light_add(type="AREA", location=(x, y, H - 0.06))
+            luce = bpy.context.active_object
+            luce.data.shape, luce.data.size = "DISK", 0.4
+            luce.data.energy = 28 * forza
+        elif tipo == "sospensione":
+            basso = H - (l.get("calata", 70) / 100)
+            cilindro(f"filo{i}", 0.004, H - basso - 0.18, (x, y, (H + basso + 0.18) / 2), M_ACCENTO)
+            cilindro(f"paralume{i}", 0.16, 0.18, (x, y, basso + 0.09), principled(f"paralume{i}", "#2b2b2b", 0.5, 0.3))
+            cilindro(f"lampadina{i}", 0.05, 0.03, (x, y, basso + 0.01), materiale_luce(f"lamp{i}", col, 20))
+            bpy.ops.object.light_add(type="POINT", location=(x, y, basso - 0.02))
+            luce = bpy.context.active_object
+            luce.data.shadow_soft_size = 0.06
+            luce.data.energy = 22 * forza
+        else:
+            cilindro(f"faretto{i}", 0.04, 0.008, (x, y, H - 0.004), faretto_acceso())
+            bpy.ops.object.light_add(type="SPOT", location=(x, y, H - 0.02))
+            luce = bpy.context.active_object
+            luce.data.spot_size = math.radians(70)
+            luce.data.spot_blend = 0.6
+            luce.data.shadow_soft_size = 0.03
+            luce.data.energy = 12 * forza
+        luce.data.color = col
+    # luce di riempimento invisibile, debole: gli angoli lontani dalle luci non diventano neri
+    W, D = XR - XL, ZW - ZB
+    bpy.ops.object.light_add(type="AREA", location=((XL + XR) / 2, (ZB + ZW) / 2, H - 0.05))
+    riemp = bpy.context.active_object
+    riemp.data.shape, riemp.data.size, riemp.data.size_y = "RECTANGLE", W * 0.7, D * 0.7
+    riemp.data.energy = (1.2 if sera else 3) * W * D
+    riemp.data.color = (1.0, 0.9, 0.8)
+    for chiave in ("visible_camera", "visible_glossy"):
+        try:
+            setattr(riemp, chiave, False)
+        except AttributeError:
+            pass
 
 
 def fotocamera():
@@ -977,7 +1274,7 @@ def imposta_render():
                 break
     except TypeError:
         pass
-    sc.view_settings.exposure = float(r.get("esposizione", 0.0))
+    sc.view_settings.exposure = float(r.get("esposizione", 0.0)) + (0.3 if SCENA.get("atmosfera") == "sera" else 0.0)
     sc.render.image_settings.file_format = "PNG"
     sc.render.image_settings.color_depth = "8"
     sc.render.filepath = USCITA

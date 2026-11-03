@@ -316,10 +316,10 @@ async function paginaRilievo(id) {
   const NOMI_STANZA = { bagno: "Bagno", cucina: "Cucina", camera: "Camera", soggiorno: "Soggiorno", altro: "Altra stanza" };
   // categorie del catalogo che hanno senso in ogni stanza (altro = tutte)
   const CATEGORIE_STANZA = {
-    bagno: ["Sanitari", "Doccia", "Vasca", "Mobile bagno", "Rubinetteria", "Termoarredo", "Illuminazione", "Arredo", "Altro"],
+    bagno: ["Sanitari", "Doccia", "Vasca", "Mobile bagno", "Specchio", "Rubinetteria", "Termoarredo", "Illuminazione", "Arredo", "Altro"],
     cucina: ["Cucina", "Tavolo", "Sedia", "Illuminazione", "Arredo", "Altro"],
-    camera: ["Letto", "Armadio", "Arredo", "Illuminazione", "Altro"],
-    soggiorno: ["Divano", "Tavolo", "Sedia", "Arredo", "Illuminazione", "Altro"],
+    camera: ["Letto", "Armadio", "Specchio", "Arredo", "Illuminazione", "Altro"],
+    soggiorno: ["Divano", "Tavolo", "Sedia", "Specchio", "Arredo", "Illuminazione", "Altro"],
   };
   let piastrelleCatalogo = null;
   const ZONE_SUP = [
@@ -605,7 +605,7 @@ async function paginaRilievo(id) {
       const p = daCatalogo;
       daCatalogo = null;
       dati.mobili.push({ nome: p.nome, tipo: `${p.categoria} ${p.nome}`, larghezza: p.larghezza, profondita: p.profondita,
-        altezza: p.altezza, quota: p.quota || 0, forma: "box", muro: true, ...dove, rotazione: 0, catalogo: p.id });
+        altezza: p.altezza, quota: p.quota || (p.categoria === "Specchio" ? 105 : 0), forma: "box", muro: true, ...dove, rotazione: 0, catalogo: p.id });
       modo = "naviga";
       $("#r-contenitore").style.cursor = "";
       document.querySelectorAll("[data-catalogo]").forEach((x) => x.classList.remove("attivo"));
@@ -648,6 +648,7 @@ async function paginaRilievo(id) {
         <input type="number" data-k="larghezza" value="${m.larghezza}" title="larghezza">×
         <input type="number" data-k="profondita" value="${m.profondita}" title="profondità">h
         <input type="number" data-k="altezza" value="${m.altezza}" title="altezza">
+        <span class="sottile">da terra</span><input type="number" data-k="quota" value="${m.quota || 0}" title="altezza da terra (cm)">
         <select data-k="rotazione" ${m.muro ? "disabled" : ""}>${[0, 90, 180, 270].map((r) =>
           `<option ${+m.rotazione === r ? "selected" : ""}>${r}</option>`).join("")}</select>
         <label class="sottile"><input type="checkbox" data-k="muro" ${m.muro ? "checked" : ""} style="width:auto"> al muro</label>
@@ -848,13 +849,15 @@ async function paginaRilievo(id) {
     if (!box) return;
     const da3d = dettaglio.origine === "piantina" && !!dati.pianta;
     const adatte = CATEGORIE_STANZA[tipoStanza];
-    const prodotti = c.prodotti.filter((p) => p.tipo !== "piastrella" && (!adatte || adatte.includes(p.categoria)));
+    const prodotti = c.prodotti.filter((p) => p.tipo !== "piastrella" && !(p.categoria === "Illuminazione" && (p.tipo_luce || "faretto") !== "applique")
+      && (!adatte || adatte.includes(p.categoria)));
     box.hidden = !conVarianti || (!prodotti.length && !da3d);
     box.innerHTML = `<span class="etichetta-piccola">📦 ${da3d ? `I pezzi del tuo catalogo per: ${NOMI_STANZA[tipoStanza]}` : "Dal mio catalogo"}</span>` +
       (prodotti.length ? prodotti.map((p) =>
         `<button type="button" data-catalogo="${p.id}" title="${p.larghezza}×${p.profondita}×h${p.altezza} cm">${p.stato_modello === "pronto" ? "🧊 " : ""}${p.nome}</button>`).join("")
         : `<span class="sottile">Nessun pezzo per questa stanza: aggiungili nel <a href="#/catalogo">Catalogo</a> (foto + misure).</span>`) +
       (da3d && prodotti.length ? `<a class="link piccolo" href="#/catalogo">+ aggiungi al catalogo</a>` : "");
+    disegnaPareteLuci();
     box.querySelectorAll("[data-catalogo]").forEach((b) => b.onclick = () => {
       daCatalogo = c.prodotti.find((p) => p.id === b.dataset.catalogo);
       box.querySelectorAll("[data-catalogo]").forEach((x) => x.classList.toggle("attivo", x === b));
@@ -1119,7 +1122,8 @@ async function paginaRilievo(id) {
       <div class="pianta-corpo ${arredo ? "solo-svg" : ""}">
         <svg id="r-svg" role="img" aria-label="Piantina della stanza"></svg>
         ${campi ? `<div class="pianta-campi">${campi}</div>` : ""}
-      </div>`;
+      </div>
+      ${arredo && daPiantina ? `<div id="r-pareti-arredo" class="pareti-arredo"></div>` : ""}`;
     if ($("#r-tipo-stanza")) $("#r-tipo-stanza").onchange = (e) => {
       tipoStanza = e.target.value;
       api(`/api/progetti/${id}/scheda`, { method: "POST", headers: { "Content-Type": "application/json" },
@@ -1242,6 +1246,245 @@ async function paginaRilievo(id) {
     el("circle", { cx: X(0), cy: Y(0), r: fs * 0.55, class: `pv-camera${spostabile ? " trascinabile" : ""}`,
       ...(spostabile ? { "data-camera": 1 } : {}) });
     el("text", { x: X(0), y: Y(0) + fs * 1.5, class: "pv-parete", "font-size": fs * 0.65 }, "punto del 360");
+  };
+
+  // ===== ELEMENTI A PARETE E LUCI (progetti 3D) =====
+  // Specchi, pensili, mensole, applique: si mettono al muro come i mobili, con l'altezza da terra.
+  // Si spostano anche in altezza nella "vista delle pareti" sotto la piantina.
+  // Luci a soffitto: un clic nella piantina; temperatura della luce e atmosfera (giorno o sera) per il render.
+  dati.luci = dati.luci || [];
+  let luceInAttesa = null;            // luce scelta, in attesa del clic nella piantina
+  let tempLuce = 3000;
+  const ELEMENTI_PARETE = ["Specchio", "Specchio retroilluminato", "Pensile bagno", "Mensola", "Colonna bagno", "Applique"];
+  const TIPI_LUCE = { faretto: ["Faretto a incasso", 8], plafoniera: ["Plafoniera", 20], sospensione: ["Lampada a sospensione", 16] };
+  const PARETE_DA_ROT = { 0: "fondo", 180: "dietro", 270: "sinistra", 90: "destra" };
+  const eLuce = (p) => p.categoria === "Illuminazione";
+  const aSoffitto = (p) => eLuce(p) && (p.tipo_luce || "faretto") !== "applique";
+
+  // posizione lungo la parete (metri da sinistra, guardando la parete) <-> punto della stanza
+  function lungoParete(k, x, z) {
+    const s = ultimaStanza;
+    return { fondo: x - s.XL, destra: s.ZW - z, dietro: s.XR - x, sinistra: z - s.ZB }[k];
+  }
+  function puntoDaParete(k, pos) {
+    const s = ultimaStanza;
+    return { fondo: [s.XL + pos, s.ZW - 0.1], destra: [s.XR - 0.1, s.ZW - pos], dietro: [s.XR - pos, s.ZB + 0.1],
+      sinistra: [s.XL + 0.1, s.ZB + pos] }[k];
+  }
+  function aggiungiElemento(nome, extra) {
+    const uguali = dati.mobili.filter((m) => (m.tipo || m.nome) === nome).length;
+    dati.mobili.push({ nome: uguali ? `${nome} ${uguali + 1}` : nome, tipo: nome, ...preset.mobili[nome], rotazione: 0, ...extra });
+  }
+
+  // ✨ specchio centrato sopra il lavabo: largo come il mobile (massimo 100 cm), 20 cm sopra il piano
+  async function specchioSopraLavabo(retro, p = null) {
+    await salva(false, true);                 // stanza aggiornata con gli ultimi pezzi messi
+    const s = ultimaStanza;
+    const i = (s && s.mobili || []).findIndex((m) => /lavabo|mobile bagno|lavandino/i.test(`${m.nome} ${m.tipo}`) && m.centro_m);
+    if (i < 0) { mostraMessaggio("Prima metti il mobile lavabo nella piantina."); return; }
+    const sm = s.mobili[i];
+    const nome = p ? p.nome : retro ? "Specchio retroilluminato" : "Specchio";
+    const dove = { centro: [...sm.centro_m], parete: PARETE_DA_ROT[Math.round(sm.rot) % 360], quota: Math.round((sm.quota_m + sm.A) * 100 + 20) };
+    if (p) dati.mobili.push({ nome: p.nome, tipo: `${p.categoria} ${p.nome}`, larghezza: p.larghezza, profondita: p.profondita,
+      altezza: p.altezza, forma: "box", muro: true, rotazione: 0, catalogo: p.id, ...dove });
+    else aggiungiElemento(nome, { larghezza: Math.min(100, Math.round(sm.L * 100)), ...dove });
+    disegnaListe(); aggiornaModello();
+    mostraMessaggio(`${nome} messo sopra il lavabo. Puoi spostarlo nella vista delle pareti, sotto la piantina.`, "ok");
+  }
+  // ✨ due applique ai lati dello specchio, a metà della sua altezza
+  async function appliqueAiLati() {
+    await salva(false, true);
+    const s = ultimaStanza;
+    const i = (s && s.mobili || []).findIndex((m) => /specchio/i.test(`${m.nome} ${m.tipo}`) && m.centro_m);
+    if (i < 0) { mostraMessaggio("Prima metti lo specchio (es. ✨ Specchio sopra il lavabo)."); return; }
+    const sm = s.mobili[i], k = PARETE_DA_ROT[Math.round(sm.rot) % 360];
+    const pos = lungoParete(k, ...sm.centro_m);
+    [-1, 1].forEach((lato) => aggiungiElemento("Applique", {
+      centro: puntoDaParete(k, pos + lato * (sm.L / 2 + 0.12)), parete: k,
+      quota: Math.round((sm.quota_m + sm.A / 2) * 100 - 11) }));
+    disegnaListe(); aggiornaModello();
+    mostraMessaggio("Due applique ai lati dello specchio.", "ok");
+  }
+  // faretti in automatico: uno ogni 1,2 m circa, a griglia
+  function farettiAutomatici() {
+    const s = ultimaStanza;
+    if (!s) return;
+    const W = s.XR - s.XL, D = s.ZW - s.ZB, col = Math.max(1, Math.round(W / 1.2)), righe = Math.max(1, Math.round(D / 1.2));
+    dati.luci = dati.luci.filter((l) => l.tipo !== "faretto" || l.catalogo);
+    for (let i = 0; i < col; i++) for (let j = 0; j < righe; j++)
+      dati.luci.push({ tipo: "faretto", k: tempLuce, centro: [s.XL + (i + 0.5) * W / col, s.ZB + (j + 0.5) * D / righe] });
+    salva(); disegnaSvg(); disegnaPareteLuci();
+    mostraMessaggio(`${col * righe} faretti a soffitto. Trascinali nella piantina per spostarli.`, "ok");
+  }
+
+  function disegnaPareteLuci() {
+    const box = $("#r-parete-luci");
+    if (!box) return;
+    const da3d = dettaglio.origine === "piantina" && !!dati.pianta;
+    box.hidden = !conVarianti || !da3d;
+    if (box.hidden) return;
+    const catLuci = catalogoProdotti.filter(aSoffitto);
+    const bagno = tipoStanza === "bagno";
+    box.innerHTML = `<div class="gruppo-elementi"><span class="etichetta-piccola">🪞 A parete</span>
+        ${bagno ? `<button type="button" class="magico-piccolo" data-auto="specchio">✨ Specchio sopra il lavabo</button>
+          <button type="button" class="magico-piccolo" data-auto="specchio-led">✨ Specchio retroilluminato sopra il lavabo</button>
+          ${catalogoProdotti.filter((p) => p.categoria === "Specchio").map((p) =>
+            `<button type="button" class="magico-piccolo" data-specchio-cat="${p.id}">✨ ${p.nome} sopra il lavabo</button>`).join("")}
+          <button type="button" class="magico-piccolo" data-auto="applique">✨ Applique ai lati dello specchio</button>` : ""}
+        ${ELEMENTI_PARETE.filter((n) => preset.mobili[n] && (bagno || !/bagno/i.test(n))).map((n) =>
+          `<button type="button" data-rapido="${n}">+ ${n}</button>`).join("")}
+      </div>
+      <div class="gruppo-elementi"><span class="etichetta-piccola">💡 Luci a soffitto</span>
+        <button type="button" class="magico-piccolo" data-auto="faretti">✨ Faretti in automatico</button>
+        ${Object.entries(TIPI_LUCE).map(([k, [n]]) => `<button type="button" data-luce="${k}">+ ${n}</button>`).join("")}
+        ${catLuci.map((p) => `<button type="button" data-luce-cat="${p.id}">${p.stato_modello === "pronto" ? "🧊 " : ""}${p.nome}</button>`).join("")}
+        <label class="sottile">Luce <select id="r-temp-luce">
+          ${[[2700, "molto calda 2700 K"], [3000, "calda 3000 K"], [4000, "naturale 4000 K"]].map(([k, n]) =>
+            `<option value="${k}" ${tempLuce === k ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      </div>
+      ${dati.luci.length ? `<div class="luci-elenco">${dati.luci.map((l, i) => `<span class="chip">💡 ${l.nome || (TIPI_LUCE[l.tipo] || ["Luce"])[0]}
+        <button type="button" class="link x" data-togli-luce="${i}" title="Togli">✕</button></span>`).join("")}
+        <button type="button" class="link piccolo" data-togli-luce="tutte">togli tutte</button></div>` : ""}
+      <div class="gruppo-elementi"><span class="etichetta-piccola">Atmosfera del render</span>
+        <div class="interruttore">${[["giorno", "☀ Giorno"], ["sera", "🌙 Sera (solo luci accese)"]].map(([k, n]) =>
+          `<button type="button" data-atmosfera="${k}" class="${(dati.atmosfera || "giorno") === k ? "attivo" : ""}">${n}</button>`).join("")}</div>
+      </div>`;
+    box.querySelectorAll("[data-rapido]").forEach((b) => b.onclick = () => {
+      document.querySelector('#r-modi [data-modo="mobili"]').click();
+      $("#r-tipo-mobile").value = b.dataset.rapido;
+      dovePosare(b.dataset.rapido);
+    });
+    box.querySelectorAll("[data-auto]").forEach((b) => b.onclick = () => ({
+      specchio: () => specchioSopraLavabo(false), "specchio-led": () => specchioSopraLavabo(true),
+      applique: appliqueAiLati, faretti: farettiAutomatici }[b.dataset.auto])());
+    box.querySelectorAll("[data-specchio-cat]").forEach((b) => b.onclick = () =>
+      specchioSopraLavabo(false, catalogoProdotti.find((p) => p.id === b.dataset.specchioCat)));
+    box.querySelectorAll("[data-luce]").forEach((b) => b.onclick = () => {
+      luceInAttesa = { tipo: b.dataset.luce, nome: TIPI_LUCE[b.dataset.luce][0] };
+      modo = "naviga";
+      mostraMessaggio(`Clicca nella piantina dove va: ${luceInAttesa.nome}.`, "ok");
+      $("#r-pianta").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    box.querySelectorAll("[data-luce-cat]").forEach((b) => b.onclick = () => {
+      const p = catalogoProdotti.find((x) => x.id === b.dataset.luceCat);
+      luceInAttesa = { tipo: p.tipo_luce || "faretto", nome: p.nome, catalogo: p.id, k: +p.k || tempLuce };
+      modo = "naviga";
+      mostraMessaggio(`Clicca nella piantina dove va: ${p.nome}.`, "ok");
+      $("#r-pianta").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    $("#r-temp-luce").onchange = (e) => {
+      tempLuce = +e.target.value;
+      dati.luci.forEach((l) => { if (!l.catalogo) l.k = tempLuce; });   // le luci del catalogo tengono la loro
+      salva();
+    };
+    box.querySelectorAll("[data-togli-luce]").forEach((b) => b.onclick = () => {
+      if (b.dataset.togliLuce === "tutte") dati.luci = []; else dati.luci.splice(+b.dataset.togliLuce, 1);
+      salva(); disegnaSvg(); disegnaPareteLuci();
+    });
+    box.querySelectorAll("[data-atmosfera]").forEach((b) => b.onclick = () => {
+      dati.atmosfera = b.dataset.atmosfera; salva(); disegnaPareteLuci();
+    });
+  }
+
+  // ---- vista delle pareti nel passo Arredo: i pezzi "al muro" visti di fronte, trascinabili (in altezza solo se sospesi)
+  function disegnaParetiArredo() {
+    const box = $("#r-pareti-arredo"), s = ultimaStanza;
+    if (!box || !s) return;
+    const H = s.H * 100, gap = 30;
+    let ox = 0, corpo = "";
+    const posizioni = [];
+    [["fondo", "A"], ["destra", "B"], ["dietro", "C"], ["sinistra", "D"]].forEach(([k, lettera]) => {
+      const L = (k === "fondo" || k === "dietro" ? s.XR - s.XL : s.ZW - s.ZB) * 100;
+      let g = `<rect x="0" y="0" width="${L}" height="${H}" fill="#fbfaf8" stroke="#2b2b2b" stroke-width="1.5"/>`;
+      (s.fissi || []).filter((f) => f.parete === k).forEach((f) => {
+        const p = f.u.map((u) => lungoParete(k, ...(k === "fondo" || k === "dietro" ? [u, 0] : [0, u])) * 100);
+        g += `<rect x="${Math.min(...p)}" y="${H - f.v[1] * 100}" width="${Math.abs(p[1] - p[0])}" height="${(f.v[1] - f.v[0]) * 100}"
+          fill="${f.tipo === "finestra" ? "#dcebf7" : "#fff"}" stroke="#8a8378"/>`;
+      });
+      (s.mobili || []).forEach((sm, i) => {
+        if (!sm.centro_m || !(dati.mobili[i] || {}).muro || PARETE_DA_ROT[Math.round(sm.rot) % 360] !== k) return;
+        const c = lungoParete(k, ...sm.centro_m) * 100, w = sm.L * 100, y0 = sm.quota_m * 100, a = sm.A * 100;
+        const sospeso = sm.quota_m > 0.05 || ELEMENTI_PARETE.some((n) => (sm.tipo || "").startsWith(n));
+        posizioni.push({ i, k, ox, L, sospeso });
+        g += `<g class="el-parete${sospeso ? " sospeso" : ""}" data-el="${posizioni.length - 1}">
+          <rect x="${c - w / 2}" y="${H - y0 - a}" width="${w}" height="${Math.max(a, 3)}" fill="hsl(${(i * 47) % 360} 55% 62% / .6)" stroke="#5b5348"/>
+          <text x="${c}" y="${H - y0 - a / 2}" text-anchor="middle" dominant-baseline="middle" font-size="11">${sm.nome}</text>
+          ${sospeso ? `<text x="${c}" y="${H - y0 + 13}" text-anchor="middle" font-size="10" fill="#6f6a62">${Math.round(y0)} cm da terra</text>` : ""}</g>`;
+      });
+      g += `<text x="${L / 2}" y="${H + 22}" text-anchor="middle" font-size="16" font-weight="600">Parete ${lettera}</text>`;
+      corpo += `<g transform="translate(${ox} 0)">${g}</g>`;
+      ox += L + gap;
+    });
+    box.innerHTML = `<div class="etichetta-piccola">Le pareti viste di fronte</div>
+      <svg viewBox="-6 -10 ${ox - gap + 12} ${H + 40}" class="pareti-aperte" role="img" aria-label="Le pareti con i pezzi al muro">${corpo}</svg>
+      <p class="sottile">Trascina specchi, pensili, mensole e applique anche in su e in giù; i mobili a terra si spostano lungo la parete.</p>`;
+    const svg = box.querySelector("svg");
+    box.querySelectorAll("[data-el]").forEach((el) => el.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const info = posizioni[+el.dataset.el], sm = s.mobili[info.i], m = dati.mobili[info.i];
+      const pt = (ev) => { const p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+      const inizio = pt(e);
+      let dx = 0, dy = 0;
+      const muovi = (ev) => {
+        const q = pt(ev);
+        dx = q.x - inizio.x; dy = info.sospeso ? q.y - inizio.y : 0;
+        el.setAttribute("transform", `translate(${dx} ${dy})`);
+      };
+      const fine = () => {
+        window.removeEventListener("pointermove", muovi); window.removeEventListener("pointerup", fine);
+        if (Math.hypot(dx, dy) < 2) { el.removeAttribute("transform"); return; }
+        const pos = Math.min(info.L - sm.L * 50, Math.max(sm.L * 50, lungoParete(info.k, ...sm.centro_m) * 100 + dx)) / 100;
+        m.centro = puntoDaParete(info.k, pos);
+        m.parete = info.k;
+        delete m.clic;
+        if (info.sospeso) m.quota = Math.max(0, Math.round(sm.quota_m * 100 - dy));
+        disegnaListe(); aggiornaModello();
+      };
+      window.addEventListener("pointermove", muovi); window.addEventListener("pointerup", fine);
+    }));
+  }
+
+  // la piantina disegna anche le luci (cerchi gialli) e le riceve con un clic
+  const disegnaSvgBase = disegnaSvg;
+  disegnaSvg = function () {
+    disegnaSvgBase();
+    const s = ultimaStanza, svg = $("#r-svg");
+    if (!s || !svg) return;
+    const X = (x) => (x - s.XL) * 100, Y = (z) => (s.ZW - z) * 100;
+    dati.luci.forEach((l, i) => {
+      const c = document.createElementNS(NS, "circle");
+      Object.entries({ cx: X(l.centro[0]), cy: Y(l.centro[1]), r: (TIPI_LUCE[l.tipo] || [0, 8])[1], class: "pv-luce", "data-luce": i })
+        .forEach(([k, v]) => c.setAttribute(k, v));
+      svg.appendChild(c);
+    });
+    if (modoPianta === "arredo" && daPiantina) disegnaParetiArredo();
+    if (svg.dataset.luciCollegate) return;
+    svg.dataset.luciCollegate = "1";
+    const punto = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
+    svg.addEventListener("pointerdown", (e) => {
+      const st = ultimaStanza;
+      if (modoPianta !== "arredo" || !st) return;
+      if (luceInAttesa) {
+        const q = punto(e);
+        dati.luci.push({ ...luceInAttesa, k: luceInAttesa.k || tempLuce, centro: [q.x / 100 + st.XL, st.ZW - q.y / 100] });
+        luceInAttesa = null;
+        salva(); disegnaSvg(); disegnaPareteLuci();
+        e.stopImmediatePropagation(); e.preventDefault();
+        return;
+      }
+      const t = e.target;
+      if (t.dataset.luce == null) return;
+      e.stopImmediatePropagation(); e.preventDefault();
+      const i = +t.dataset.luce, a = punto(e);
+      const muovi = (ev) => { const q = punto(ev); t.setAttribute("transform", `translate(${q.x - a.x} ${q.y - a.y})`); };
+      const fine = (ev) => {
+        window.removeEventListener("pointermove", muovi); window.removeEventListener("pointerup", fine);
+        const q = punto(ev);
+        dati.luci[i].centro = [dati.luci[i].centro[0] + (q.x - a.x) / 100, dati.luci[i].centro[1] - (q.y - a.y) / 100];
+        salva(); disegnaSvg();
+      };
+      window.addEventListener("pointermove", muovi); window.addEventListener("pointerup", fine);
+    }, true);
   };
 
   // trascinamento (mouse e dito): fotocamera (solo da piantina, passo La stanza) e mobili (passo Disposizione)
@@ -1767,7 +2010,7 @@ async function paginaRilievo(id) {
     "#r-pianta": ["stanza", "disposizione"], "#r-allarme": ["stanza", "disposizione"], "#r-cosa": ["cosa"],
     "#r-arredo": daPiantina ? ["disposizione"] : ["disposizione", "stile"], "#r-stile": ["stile"], "#r-riepilogo": ["genera"],
     "#r-varianti": ["disposizione"], "#r-proposta": ["disposizione"], "#r-rapidi": ["disposizione"],
-    "#r-catalogo-rilievo": ["disposizione"],
+    "#r-catalogo-rilievo": ["disposizione"], "#r-parete-luci": ["disposizione"],
     "#r-azioni-arredo": servizio === "prodotto" ? ["stile"] : ["disposizione"],
     "#r-schede": ["stile"], "#r-materiali-titolo": daPiantina ? [] : ["stile"], "#r-materiali": daPiantina ? [] : ["stile"],
   };
@@ -2100,6 +2343,31 @@ async function paginaCatalogo() {
   }
   modulo.querySelectorAll('[name="foto_tipo"]').forEach((r) => r.onchange = tipoFoto);
   document.querySelectorAll("#cat-tipo [data-tipo]").forEach((b) => b.onclick = () => tipoModulo(b.dataset.tipo));
+  // luci e specchi: campi in più, e le misure spiegate per loro
+  function categoriaModulo() {
+    const cat = modulo.elements.tipo.value === "prodotto" ? $("#cat-categoria").value : "";
+    modulo.querySelectorAll("[data-solo-cat]").forEach((e) => { e.hidden = e.dataset.soloCat !== cat; });
+    // lampade: spesso il sito dà solo il diametro -> profondità e altezza diventano facoltative
+    const luce = cat === "Illuminazione";
+    modulo.elements.profondita.required = modulo.elements.altezza.required = !luce;
+    if (modulo.elements.tipo.value === "prodotto")
+      modulo.querySelector('[data-etichetta="larghezza"]').textContent = luce ? "Larghezza o diametro" : "Larghezza";
+    modulo.elements.profondita.placeholder = luce ? "= diametro" : "";
+    modulo.elements.altezza.placeholder = luce ? "automatica" : "";
+    if (luce) $("#cat-spiega-misure").textContent =
+      "Se il sito dà solo il diametro (es. 40 cm) scrivi solo quello: la profondità diventa uguale e l'altezza la mette il programma " +
+      "(faretto 2 cm, plafoniera 6, sospensione 25, applique 20). Per le sospensioni la «Calata» è quanto scende dal soffitto.";
+    else if (cat === "Specchio") $("#cat-spiega-misure").textContent =
+      "Larghezza e altezza dello specchio, profondità = spessore (2-4 cm). «Da terra»: di solito 105-110 cm sopra un lavabo.";
+  }
+  $("#cat-categoria").addEventListener("change", categoriaModulo);
+  modulo.elements.nome.addEventListener("input", () => {
+    const n = modulo.elements.nome.value.toLowerCase();
+    const tipo = /plafonier/.test(n) ? "plafoniera" : /sospension|pendent|lampadari/.test(n) ? "sospensione"
+      : /applique|lampada da parete/.test(n) ? "applique" : /farett|spot/.test(n) ? "faretto" : null;
+    if (tipo && $("#cat-categoria").value === "Illuminazione") modulo.elements.tipo_luce.value = tipo;
+  });
+  document.querySelectorAll("#cat-tipo [data-tipo]").forEach((b) => b.addEventListener("click", categoriaModulo));
   // nome del file scelto, così si vede che è stato preso
   [["foto", "#cat-nome-foto"], ["modello", "#cat-nome-modello"]].forEach(([campo, etichetta]) => {
     modulo.elements[campo].addEventListener("change", () => {
@@ -2231,6 +2499,16 @@ async function paginaCatalogo() {
           ${num("altezza", piastrella ? "Spessore" : "Altezza")}${piastrella ? "" : num("quota", "Da terra")}
         </div>
         ${avvisoProporzioni(p)}
+        ${p.categoria === "Illuminazione" ? `<div class="cat-misure">
+            <label>Tipo di luce<select name="tipo_luce">${[["faretto", "faretto a incasso"], ["plafoniera", "plafoniera"],
+              ["sospensione", "lampada a sospensione"], ["applique", "applique (a parete)"]].map(([v, n]) =>
+              `<option value="${v}" ${(p.tipo_luce || "faretto") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+            <label>Luce<select name="k">${[[2700, "molto calda 2700 K"], [3000, "calda 3000 K"], [4000, "naturale 4000 K"]].map(([v, n]) =>
+              `<option value="${v}" ${+(p.k || 3000) === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+            ${num("calata", "Calata (sospensioni)")}</div>` : ""}
+        ${p.categoria === "Specchio" ? `<label>Luce dello specchio<select name="luce_specchio">${[["", "nessuna"],
+          ["sopra", "lampada sopra lo specchio"], ["dietro", "retroilluminato (LED dietro)"]].map(([v, n]) =>
+          `<option value="${v}" ${(p.luce_specchio || (p.led ? "dietro" : "")) === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
         ${MISURE_TIPICHE[p.categoria] ? `<p class="suggerimento">📏 Misure tipiche — ${MISURE_TIPICHE[p.categoria]}
           Le misure vere sono nella scheda tecnica del produttore (sito o catalogo, voce "dimensioni").</p>` : ""}
         ${piastrella ? `<label>La foto mostra<select name="foto_tipo">
@@ -2262,6 +2540,7 @@ async function paginaCatalogo() {
     form.onsubmit = async (e) => {
       e.preventDefault();
       const campi = Object.fromEntries(new FormData(form).entries());
+      if (p.categoria === "Specchio") campi.led = campi.luce_specchio === "dietro" ? "1" : "";
       try {
         await api(`/api/catalogo/${p.id}/modifica`, { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(campi) });
@@ -2280,6 +2559,11 @@ async function paginaCatalogo() {
     $("#cat-errore").hidden = true;
     const corpo = new FormData(modulo);
     ["foto", "modello"].forEach((k) => { if (!modulo.elements[k].files.length) corpo.delete(k); });
+    if (corpo.get("tipo") === "prodotto" && corpo.get("categoria") === "Illuminazione") {
+      // lampada tonda: profondità = diametro; altezza tipica del tipo di luce
+      if (!+corpo.get("profondita")) corpo.set("profondita", corpo.get("larghezza"));
+      if (!+corpo.get("altezza")) corpo.set("altezza", { faretto: 2, plafoniera: 6, sospensione: 25, applique: 20 }[corpo.get("tipo_luce")] || 6);
+    }
     try {
       const p = await api("/api/catalogo", { method: "POST", body: corpo });
       const tipoAttuale = modulo.elements.tipo.value;

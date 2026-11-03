@@ -168,6 +168,7 @@
           <div class="proposta" id="r-proposta" hidden></div>
           <div class="aggiungi-rapido" id="r-rapidi"></div>
           <div class="aggiungi-rapido catalogo-rilievo" id="r-catalogo-rilievo"></div>
+          <div class="parete-luci" id="r-parete-luci" hidden></div>
           <div class="schede-arredo" id="r-schede"></div>
           <h3 id="r-materiali-titolo">Materiali <span class="sottile">· facoltativi</span></h3>
           <div class="schede-arredo" id="r-materiali"></div>
@@ -345,6 +346,19 @@
         </div>
         <p class="sottile" id="cat-spiega-misure">Le misure vere del prodotto (dalla scheda tecnica): il modello 3D viene portato esattamente a queste misure.
           "Da terra" serve per i prodotti sospesi (es. mobile lavabo a 30 cm).</p>
+        <div class="cat-misure" data-solo-cat="Illuminazione" hidden>
+          <label>Tipo di luce<select name="tipo_luce">
+            <option value="faretto">faretto a incasso</option><option value="plafoniera">plafoniera</option>
+            <option value="sospensione">lampada a sospensione</option><option value="applique">applique (a parete)</option></select></label>
+          <label>Luce<select name="k"><option value="2700">molto calda 2700 K</option><option value="3000" selected>calda 3000 K</option>
+            <option value="4000">naturale 4000 K</option></select></label>
+          <label>Calata (sospensioni)<span><input name="calata" type="number" min="10" max="200" value="70"> cm</span></label>
+        </div>
+        <div class="cat-misure" data-solo-cat="Specchio" hidden>
+          <label>Luce dello specchio<select name="luce_specchio">
+            <option value="">nessuna</option><option value="sopra">lampada sopra lo specchio</option>
+            <option value="dietro">retroilluminato (LED dietro)</option></select></label>
+        </div>
         <div class="cat-misure" data-solo="piastrella" hidden>
           <label>Finitura<select name="finitura" id="cat-finitura"></select></label>
           <label data-solo-foto="piastrella">Fuga<span><input name="fuga_mm" type="number" min="0" max="15" value="2"> mm</span></label>

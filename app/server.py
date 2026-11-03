@@ -233,7 +233,8 @@ async def catalogo_aggiungi(nome: str = Form(...), categoria: str = Form("Altro"
                             fornitore: str = Form(""), codice: str = Form(""), prezzo: str = Form(""), nota: str = Form(""),
                             rotazione_modello: int = Form(0), tipo: str = Form("prodotto"), finitura: str = Form("opaca"),
                             fuga_colore: str = Form("#b9b2a6"), fuga_mm: int = Form(2), posa: str = Form("dritta"),
-                            foto_tipo: str = Form("piastrella"), foto: UploadFile | None = File(None), modello: UploadFile | None = File(None)):
+                            foto_tipo: str = Form("piastrella"), tipo_luce: str = Form("faretto"), k: int = Form(3000),
+                            calata: int = Form(70), led: str = Form(""), luce_specchio: str = Form(""), foto: UploadFile | None = File(None), modello: UploadFile | None = File(None)):
     from . import catalogo
     if not nome.strip() or min(larghezza, profondita, altezza) <= 0:
         raise HTTPException(400, "Servono il nome e le misure (larghezza, profondità, altezza in cm).")
@@ -242,7 +243,8 @@ async def catalogo_aggiungi(nome: str = Form(...), categoria: str = Form("Altro"
                                "altezza": altezza, "quota": quota, "fornitore": fornitore, "codice": codice,
                                "prezzo": prezzo, "nota": nota, "rotazione_modello": rotazione_modello, "tipo": tipo,
                                "finitura": finitura, "fuga_colore": fuga_colore, "fuga_mm": fuga_mm, "posa": posa,
-                               "foto_tipo": foto_tipo},
+                               "foto_tipo": foto_tipo, "tipo_luce": tipo_luce, "k": k, "calata": calata, "led": led,
+                               "luce_specchio": luce_specchio},
                               (foto.filename, await foto.read()) if foto is not None and foto.filename else None,
                               (modello.filename, await modello.read()) if modello is not None and modello.filename else None)
     except ValueError as e:

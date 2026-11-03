@@ -31,7 +31,8 @@ FORMATI_MODELLO = (".glb", ".gltf", ".obj", ".fbx")
 FORMATI_FOTO = (".jpg", ".jpeg", ".png", ".webp")
 POSE = ["dritta", "sfalsata", "terzo", "diagonale"]
 FINITURE = ["opaca", "satinata", "lucida", "strutturata"]      # la prima è quella proposta: lucida solo se scelta
-CATEGORIE = ["Piastrella", "Sanitari", "Doccia", "Vasca", "Mobile bagno", "Rubinetteria", "Termoarredo",
+TIPI_LUCE = ["faretto", "plafoniera", "sospensione", "applique"]
+CATEGORIE = ["Piastrella", "Sanitari", "Doccia", "Vasca", "Mobile bagno", "Specchio", "Rubinetteria", "Termoarredo",
              "Cucina", "Letto", "Divano", "Tavolo", "Sedia", "Armadio", "Arredo", "Illuminazione", "Altro"]
 _blocco = threading.Lock()
 
@@ -123,6 +124,12 @@ def aggiungi(dati, foto=None, modello=None):
          "quota": int(dati.get("quota") or 0), "fornitore": dati.get("fornitore", ""), "codice": dati.get("codice", ""),
          "prezzo": dati.get("prezzo", ""), "nota": dati.get("nota", ""),
          "rotazione_modello": int(dati.get("rotazione_modello") or 0),
+         # luci: tipo (faretto, plafoniera, sospensione, applique), temperatura in Kelvin, calata per le sospensioni (cm)
+         "tipo_luce": dati.get("tipo_luce") if dati.get("tipo_luce") in TIPI_LUCE else "faretto",
+         "k": int(dati.get("k") or 3000), "calata": int(dati.get("calata") or 70),
+         # specchi: retroilluminato con LED
+         "led": str(dati.get("led", "")).lower() in ("1", "true", "on", "si", "sì"),
+         "luce_specchio": dati.get("luce_specchio") if dati.get("luce_specchio") in ("sopra", "dietro") else "",
          # "proporzioni" = il modello si ingrandisce in proporzione dalla larghezza; "esatte" = stirato sulle 3 misure
          "scala_modello": "esatte" if dati.get("scala_modello") == "esatte" else "proporzioni",
          "foto": None, "modello": None, "anteprima": None, "stato_modello": "nessuno", "messaggio": "",
@@ -165,8 +172,10 @@ def carica_modello(pid, modello):
 def modifica(pid, campi):
     ammessi = {"nome", "categoria", "larghezza", "profondita", "altezza", "quota", "fornitore", "codice", "prezzo",
                "nota", "rotazione_modello", "finitura", "fuga_colore", "fuga_mm", "posa", "scala_modello",
-               "foto_tipo"}
-    for k in ("larghezza", "profondita", "altezza", "quota", "fuga_mm", "rotazione_modello"):
+               "foto_tipo", "tipo_luce", "k", "calata", "led", "luce_specchio"}
+    if "led" in campi:
+        campi["led"] = str(campi["led"]).lower() in ("1", "true", "on", "si", "sì")
+    for k in ("larghezza", "profondita", "altezza", "quota", "fuga_mm", "rotazione_modello", "k", "calata"):
         if k in campi:
             campi[k] = int(float(campi[k] or 0))
     if "nome" in campi and not str(campi["nome"]).strip():

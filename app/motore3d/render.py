@@ -75,6 +75,11 @@ def _con_modello(m):
         if percorso:
             m["modello"] = percorso
             m["rotazione_modello"] = (p or {}).get("rotazione_modello", 0)
+        if p and p.get("categoria") == "Illuminazione":
+            m["luce"], m["k"] = True, p.get("k", 3000)          # applique del catalogo: si accende
+        if p and p.get("categoria") == "Specchio":
+            m["led"] = m.get("led") or p.get("led", False)
+            m["luce_specchio"] = p.get("luce_specchio") or ("dietro" if p.get("led") else "")
             m["scala_modello"] = (p or {}).get("scala_modello", "proporzioni")
     return m
 
@@ -108,6 +113,22 @@ def superfici_per_blender(superfici):
     return out
 
 
+def _luce_catalogo(l):
+    """Luce a soffitto presa dal catalogo: tipo, temperatura, calata, misure e modello 3D veri."""
+    if l.get("catalogo"):
+        from .. import catalogo
+        p = catalogo.prodotto(l["catalogo"])
+        if p:
+            l.update({"tipo": p.get("tipo_luce", l.get("tipo", "faretto")), "k": p.get("k", l.get("k", 3000)),
+                      "calata": p.get("calata", 70), "L": p["larghezza"] / 100, "P": p["profondita"] / 100,
+                      "A": p["altezza"] / 100, "rotazione_modello": p.get("rotazione_modello", 0),
+                      "scala_modello": p.get("scala_modello", "proporzioni")})
+            percorso = catalogo.percorso_modello(l["catalogo"])
+            if percorso:
+                l["modello"] = percorso
+    return l
+
+
 def prepara(s, richiesta="", superfici=None):
     """Dalla stanza calcolata (p3_stanza.costruisci, già serializzata) ai dati per Blender."""
     nomi = " ".join(f"{m.get('nome', '')} {m.get('tipo', '')}".lower() for m in s.get("mobili", []))
@@ -116,10 +137,12 @@ def prepara(s, richiesta="", superfici=None):
         "stanza": {k: s[k] for k in ("XL", "XR", "ZB", "ZW", "H", "h", "theta")},
         "fissi": [{k: f[k] for k in ("tipo", "parete", "u", "v")} for f in s.get("fissi", [])],
         "mobili": [_con_modello({k: m.get(k) for k in ("nome", "tipo", "centro_m", "L", "P", "A", "rot", "quota_m", "forma",
-                                                       "catalogo")})
+                                                       "catalogo", "led", "luce_specchio")})
                    for m in s.get("mobili", []) if m.get("centro_m")],
         "finiture": finiture(richiesta, bagno),
         "superfici": superfici_per_blender(superfici),
+        "luci": [_luce_catalogo(dict(l)) for l in s.get("luci", [])],
+        "atmosfera": s.get("atmosfera", "giorno"),
     }
 
 
