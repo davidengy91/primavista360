@@ -2571,11 +2571,14 @@ async function naviga() {
     const p = await api("/api/preset");
     FASI = p.fasi; PRESET = p.preset; PRESET_ARREDO = p.preset_arredo || []; CORREZIONI = p.correzioni || {};
     const s = await api("/api/salute");
-    if (!s.openai || !s.anthropic) {
+    // ogni chiave serve solo ad alcune funzioni: si dice quali, senza bloccare il resto
+    const mancano = [];
+    if (!s.anthropic) mancano.push("Anthropic (serve per leggere le piantine)");
+    if (!s.openai) mancano.push("OpenAI (serve solo per i lavori sulle foto 360; il render 3D da piantina funziona lo stesso)");
+    if (mancano.length) {
       const avviso = $("#avviso-chiavi");
       avviso.hidden = false;
-      avviso.textContent = "Mancano le chiavi API nel file .env (" +
-        [!s.openai && "OpenAI", !s.anthropic && "Anthropic"].filter(Boolean).join(" e ") + "). Il programma non può generare.";
+      avviso.textContent = `Nel file .env manca la chiave ${mancano.join(" e la chiave ")}.`;
     }
   } catch (e) { /* server non raggiungibile: la pagina mostrerà l'errore */ }
   window.addEventListener("hashchange", naviga);
