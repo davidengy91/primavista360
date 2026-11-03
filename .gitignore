@@ -1,0 +1,32 @@
+# ---- SEGRETI: le chiavi API restano solo sul computer di ognuno (si parte da .env.example)
+.env
+.env.*
+!.env.example
+
+# ---- ambiente Python (ognuno lo crea con avvia.bat / requirements.txt)
+.venv/
+__pycache__/
+*.pyc
+
+# ---- DATI dei clienti e lavori: non sono codice
+progetti/
+case/
+catalogo/
+backup/
+*.jpg
+*.jpeg
+*.png
+!app/web/**/*.png
+!app/web/**/*.jpg
+
+# ---- modelli AI pesanti (oltre i limiti di GitHub): si copiano a mano, vedi README
+terzi/**/ckpt/
+terzi/sam2/
+terzi/esrgan/
+*.pth
+*.safetensors
+*.glb
+
+# ---- impostazioni personali dell'editor e di Claude Code
+.claude/settings.local.json
+.vscode/

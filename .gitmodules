@@ -1,0 +1,3 @@
+[submodule "terzi/HorizonNet"]
+	path = terzi/HorizonNet
+	url = https://github.com/sunset1995/HorizonNet.git

@@ -1,0 +1,35 @@
+{
+  "taglio": {
+    "viste_orizzontali": 8,
+    "fov_orizzontali": 100,
+    "fov_zenit_nadir": 110,
+    "sovracampionamento": 1.0
+  },
+  "ricomposizione": {
+    "metodo": "multibanda",
+    "livelli_multibanda": 5,
+    "potenza_peso": 2.0,
+    "larghezza_lavoro_max": 8192
+  },
+  "ai": {
+    "modello_claude": "claude-opus-5-5",
+    "modello_immagini": "gpt-image-2.5-sunburst",
+    "larghezza_360": 3840,
+    "qualita_360": "high",
+    "qualita_poli": "medium",
+    "lato_vista_ai": 1024,
+    "qualita_immagini": "medium",
+    "lato_viste_per_claude": 768,
+    "voto_minimo": 8,
+    "punteggio_struttura_minimo": 55,
+    "tentativi": 2
+  },
+  "output": {
+    "qualita_jpg": 95
+  },
+  "motore3d": {
+    "attivo": true,
+    "larghezza": 4096,
+    "campioni": 128
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "_nota": "Prezzi in dollari per 1 milione di token. Aggiornali a mano da https://developers.openai.com/api/docs/pricing e https://claude.com/pricing. Ultimo controllo: 31/10/2026.",
+  "cambio_usd_eur": 0.92,
+  "openai": {
+    "gpt-image-2.5-sunburst": {"testo_input": 5.0, "immagine_input": 8.0, "immagine_output": 30.0},
+    "gpt-image-2.5-flare":    {"testo_input": 5.0, "immagine_input": 8.0, "immagine_output": 30.0},
+    "gpt-image-2":            {"testo_input": 5.0, "immagine_input": 8.0, "immagine_output": 30.0}
+  },
+  "anthropic": {
+    "claude-opus-5-5":   {"input": 4.0, "output": 20.0},
+    "claude-sonnet-5-5": {"input": 2.0, "output": 10.0}
+  }
+}

@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PrimaVista 360 Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pannellum/2.5.6/pannellum.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="barra">
+    <a class="marchio" href="#/nuovo">
+      <span class="logo">PV</span>
+      <span class="nome-marchio"><strong>PrimaVista</strong> 360 Studio<small>Ristrutturazione e arredo virtuale per il 360</small></span>
+    </a>
+    <nav>
+      <a href="#/nuovo" data-nav="nuovo">Nuovo progetto</a>
+      <a href="#/catalogo" data-nav="catalogo">Catalogo</a>
+      <a href="#/progetti" data-nav="progetti">Progetti</a>
+    </nav>
+  </header>
+
+  <div id="avviso-chiavi" class="avviso" hidden></div>
+
+  <main id="pagina"></main>
+
+  <!-- ============ MODELLI DELLE SCHERMATE ============ -->
+
+  <template id="t-nuovo">
+    <section class="intestazione">
+      <h1>Nuovo progetto</h1>
+      <p>Carica la foto 360 della stanza, la piantina o tutte e due: poi il programma ti guida passo per passo.</p>
+    </section>
+    <div class="griglia-nuovo">
+      <div class="colonna">
+        <label id="zona-upload" class="zona-upload">
+          <input id="file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" multiple hidden>
+          <div class="zona-vuota">
+            <div class="icona-upload">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+            </div>
+            <strong>Trascina qui la foto 360 e/o la piantina</strong>
+            <span>oppure clicca per sceglierle · foto 360 JPG 2:1 (es. Insta360) · piantina PDF o immagine</span>
+          </div>
+        </label>
+        <div id="slot-foto" class="slot" hidden>
+          <div class="slot-testa"><strong>Foto 360</strong><button id="togli-foto" class="link" type="button">togli</button></div>
+          <div id="anteprima" class="viewer"></div>
+          <div id="info-foto" class="chips"></div>
+          <ul id="messaggi-foto" class="messaggi"></ul>
+        </div>
+        <div id="slot-piantina" class="slot" hidden>
+          <div class="slot-testa"><strong>Piantina</strong><button id="togli-piantina" class="link" type="button">togli</button></div>
+          <div id="piantina-anteprima" class="piantina-anteprima"></div>
+          <div id="info-piantina" class="chips"></div>
+        </div>
+      </div>
+
+      <form id="modulo" class="colonna pannello">
+        <div class="passi-barra piccola"><span class="passo-barra attivo">1 · Carica</span><span class="passo-barra">2 · La stanza</span>
+          <span class="passo-barra">3 · Cosa vuoi fare</span><span class="passo-barra">…</span></div>
+        <div class="passo">
+          <div class="passo-titolo"><span class="numero">1</span>Carica quello che hai</div>
+          <ul class="lista-cosa-serve">
+            <li id="ok-foto"><strong>Foto 360</strong> della stanza: per vedere la stanza vera ristrutturata.</li>
+            <li id="ok-piantina"><strong>Piantina</strong> (PDF o immagine): per le misure esatte, o se la foto non c'è.</li>
+          </ul>
+          <p class="sottile">Basta una delle due; con tutte e due il risultato è più preciso.</p>
+        </div>
+        <div class="passo" id="passo-stanza" hidden>
+          <div class="passo-titolo"><span class="numero">2</span>Quale stanza della piantina?</div>
+          <input id="nome-stanza" type="text" placeholder="Es. camera matrimoniale, soggiorno, bagno">
+          <p class="sottile" id="nota-stanza">Claude legge misure, porte e finestre di questa stanza (circa 0,02 €).</p>
+        </div>
+        <button id="genera" class="bottone primario grande" type="submit" disabled>Avanti →</button>
+        <p id="errore-modulo" class="errore" hidden></p>
+      </form>
+    </div>
+  </template>
+
+  <template id="t-lavoro">
+    <section class="intestazione">
+      <h1>Sto lavorando al tuo 360</h1>
+      <p id="lavoro-richiesta" class="richiesta-citata"></p>
+    </section>
+    <div class="griglia-lavoro">
+      <div class="pannello">
+        <ol id="fasi" class="fasi"></ol>
+      </div>
+      <div class="colonna">
+        <div class="pannello stato-live">
+          <div class="spinner-grande"></div>
+          <div>
+            <div id="lavoro-testo" class="testo-live">Avvio…</div>
+            <div class="sottile"><span id="lavoro-tempo">0:00</span> trascorsi · spesa finora <span id="lavoro-costo">0,00 €</span></div>
+          </div>
+        </div>
+        <div class="pannello nota">
+          <strong>Puoi chiudere questa pagina.</strong>
+          Il lavoro continua sul computer: lo ritrovi in <a href="#/progetti">Progetti</a>.
+          Ogni risultato viene controllato da Claude; se non è consegnabile il programma lo rifà da solo.
+        </div>
+        <div id="lavoro-errore" class="pannello errore-box" hidden></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="t-rilievo">
+    <section class="intestazione intestazione-consegna">
+      <div>
+        <div class="sovratitolo sovratitolo-accento"><span class="punto-accento"></span><span id="r-servizio">Ristruttura</span></div>
+        <h1 id="r-titolo">Prepara la stanza</h1>
+        <p class="richiesta-citata" id="r-intro"></p>
+      </div>
+      <div class="azioni">
+        <button id="r-aggiorna" class="bottone avanzato">Aggiorna guida</button>
+        <button id="r-conferma" class="bottone primario">Genera</button>
+      </div>
+    </section>
+
+    <nav class="passi-barra" id="r-passi" aria-label="Passi del progetto"></nav>
+    <div class="griglia-consegna">
+      <div class="confronto-box">
+        <div class="strumenti">
+          <div class="interruttore avanzato" id="r-modi">
+            <button data-modo="naviga" class="attivo">Naviga</button>
+            <button class="avanzato" data-modo="angoli">Angoli a terra</button>
+            <button class="avanzato" data-modo="spigoli">Spigoli</button>
+            <button class="avanzato" data-modo="battiscopa">Battiscopa</button>
+            <button class="avanzato" data-modo="soffitto">Soffitto</button>
+            <button data-modo="fissi">Porte e finestre</button>
+            <button data-modo="mobili">Mobili</button>
+            <button class="avanzato" data-modo="linee">Sposta linee</button>
+            <button class="avanzato" data-modo="cancella">Cancella punto</button>
+          </div>
+          <div class="interruttore" id="r-viste" hidden>
+            <button data-vista="foto" class="attivo">Foto</button>
+            <button data-vista="linee">Pareti trovate</button>
+            <button data-vista="anteprima" hidden>Anteprima 3D</button>
+            <button class="avanzato" data-vista="guida">Guida radar</button>
+          </div>
+        </div>
+        <div class="barra-modo" id="r-barra">
+          <span id="r-suggerimento">Trascina per guardarti intorno.</span>
+          <select id="r-parete" hidden><option>A</option><option>B</option><option>C</option><option>D</option></select>
+          <select id="r-tipo-fisso" hidden></select>
+          <select id="r-tipo-mobile" hidden></select>
+        </div>
+        <div class="confronto" id="r-contenitore"><div id="v-rilievo" class="viewer strato"></div>
+          <div id="r-attesa" class="attesa" hidden><div class="spinner-grande"></div>Un attimo…</div>
+        </div>
+        <section class="pannello pianta-editor" id="r-pianta" hidden></section>
+        <div class="allarme-stanza" id="r-allarme" hidden></div>
+        <section class="pannello cosa" id="r-cosa"></section>
+        <section class="pannello stile" id="r-stile"></section>
+        <section class="pannello arredo" id="r-arredo">
+          <div class="arredo-testa">
+            <div>
+              <h2 id="r-arredo-titolo">Arredo e prodotti reali</h2>
+              <p class="sottile" id="r-arredo-testo">Aggiungi i mobili e, se vuoi, trascina sulla scheda la foto del prodotto vero (es. il letto IKEA dal sito).
+                ChatGPT lo riproduce nel 360 con la misura del blocco.</p>
+            </div>
+          </div>
+          <div class="varianti" id="r-varianti" hidden></div>
+          <div class="azioni-arredo" id="r-azioni-arredo"></div>
+          <div class="proposta" id="r-proposta" hidden></div>
+          <div class="aggiungi-rapido" id="r-rapidi"></div>
+          <div class="aggiungi-rapido catalogo-rilievo" id="r-catalogo-rilievo"></div>
+          <div class="schede-arredo" id="r-schede"></div>
+          <h3 id="r-materiali-titolo">Materiali <span class="sottile">· facoltativi</span></h3>
+          <div class="schede-arredo" id="r-materiali"></div>
+          <input id="r-file-rif" type="file" accept="image/jpeg,image/png" hidden>
+        </section>
+        <section class="pannello riepilogo-box" id="r-riepilogo"></section>
+        <div class="nav-passi" id="r-nav"></div>
+      </div>
+
+      <aside class="colonna">
+        <div class="pannello avanzato">
+          <div class="etichetta-piccola">Fotocamera</div>
+          <div class="campi">
+            <label>Altezza <input id="r-altezza" type="number" step="0.01" value="1.50"> m</label>
+            <label><span><input id="r-tara" type="checkbox" style="width:auto"> Tara con la porta alta</span>
+              <span><input id="r-alt-porta" type="number" step="1" value="210"> cm</span></label>
+            <label>Bolla avanti <input id="r-pitch" type="number" step="0.1" value="0"> °</label>
+            <label>Bolla lato <input id="r-roll" type="number" step="0.1" value="0"> °</label>
+          </div>
+        </div>
+        <div class="pannello avanzato">
+          <div class="etichetta-piccola">Stanza (uso interno)</div>
+          <div id="r-misure" class="misure"><span class="sottile">Clicca i 4 angoli del pavimento.</span></div>
+
+          <ul id="r-avvisi" class="avvisi"></ul>
+        </div>
+        <div class="pannello" id="r-pannello-mobili">
+          <div class="avanzato">
+            <div class="etichetta-piccola">Pareti <button class="link piccolo" id="r-cancella-angoli">azzera</button></div>
+            <div id="r-angoli" class="sottile">Nessuno</div>
+          </div>
+          <div class="avanzato">
+            <div class="etichetta-piccola spazio">Porte, finestre, elementi fissi</div>
+            <ul id="r-fissi" class="lista-rilievo"></ul>
+          </div>
+          <div class="etichetta-piccola">Mobili (misure in cm)</div>
+          <ul id="r-mobili" class="lista-rilievo"></ul>
+        </div>
+      </aside>
+    </div>
+  </template>
+
+  <template id="t-mappa">
+    <section class="intestazione intestazione-consegna">
+      <div>
+        <div class="sovratitolo sovratitolo-accento"><span class="punto-accento"></span>Radar della stanza · serve la tua conferma</div>
+        <h1 id="m-titolo">Ecco cosa ho capito della stanza</h1>
+        <p id="m-descrizione" class="richiesta-citata"></p>
+      </div>
+      <div class="azioni">
+        <button id="m-conferma" class="bottone primario">Conferma e genera</button>
+      </div>
+    </section>
+    <div class="griglia-consegna">
+      <div class="confronto-box">
+        <div class="legenda">
+          <span><i class="pallino-col fisso"></i>Fisso · resta identico</span>
+          <span><i class="pallino-col rinnova"></i>Rinnova · stesso posto, stile nuovo</span>
+          <span><i class="pallino-col togli"></i>Togli</span>
+        </div>
+        <div class="confronto"><div id="v-mappa" class="viewer strato"></div></div>
+        <p class="sottile centro">Guarda nel 360 i numeri colorati. Se un elemento è nella categoria sbagliata, cambialo nell'elenco.</p>
+      </div>
+      <aside class="colonna">
+        <div class="pannello">
+          <div class="etichetta-piccola">Elementi trovati</div>
+          <ol id="m-elenco" class="elenco-mappa"></ol>
+        </div>
+        <div class="pannello nota">
+          <strong>Dopo la conferma</strong> il programma ristruttura il 360 e poi rimette i pixel originali sugli
+          elementi <em>fissi</em> con il lucchetto 🔒, così restano identici. Spesa finora: <span id="m-costo">—</span>.
+        </div>
+      </aside>
+    </div>
+  </template>
+
+  <template id="t-consegna">
+    <section class="intestazione intestazione-consegna">
+      <div>
+        <div class="sovratitolo"><span class="punto-ok"></span>Consegna pronta · <span id="c-data"></span></div>
+        <h1 id="c-titolo">Il tuo 360 ristrutturato</h1>
+        <p id="c-richiesta" class="richiesta-citata"></p>
+      </div>
+      <div class="azioni">
+        <a id="c-scarica" class="bottone primario" href="#">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 4v12m0 0-4-4m4 4 4-4M4 20h16"/></svg>
+          Scarica JPG 360
+        </a>
+        <a id="c-scarica-pd" class="bottone" href="#">Prima / dopo</a>
+        <button id="c-cartella" class="bottone" type="button">Apri cartella</button>
+        <button id="c-rifai" class="bottone" type="button">Rifai</button>
+      </div>
+    </section>
+
+    <div class="griglia-consegna">
+      <div class="confronto-box">
+        <div class="interruttore" id="c-varianti" hidden></div>
+        <div class="interruttore">
+          <button data-vista="confronto" class="attivo">Confronto</button>
+          <button data-vista="prima">Prima</button>
+          <button data-vista="dopo">Dopo</button>
+          <button data-vista="bordi" title="Bordi della foto vera (rosso) sopra il risultato; verde = coincidono">Bordi</button>
+          <button id="schermo-intero" class="icona" title="Schermo intero">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+        </div>
+        <div id="confronto" class="confronto">
+          <div id="v-dopo" class="viewer strato"></div>
+          <div id="v-prima" class="viewer strato strato-sopra"></div>
+          <div id="maniglia" class="maniglia"><span></span></div>
+          <div class="etichetta sx">PRIMA</div>
+          <div class="etichetta dx">DOPO</div>
+        </div>
+        <p class="sottile centro">Trascina per guardarti intorno · sposta la maniglia per confrontare · rotellina per lo zoom</p>
+      </div>
+
+      <aside class="colonna">
+        <div class="pannello qualita">
+          <div class="anello" id="c-anello"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15.9" class="anello-fondo"/><circle cx="18" cy="18" r="15.9" class="anello-valore" id="c-anello-valore"/></svg><span id="c-voto">–</span></div>
+          <div>
+            <div class="etichetta-piccola">Controllo qualità</div>
+            <strong id="c-voto-testo">—</strong>
+            <div class="sottile">Struttura rispettata: <span id="c-struttura">—</span></div>
+          </div>
+        </div>
+        <div class="pannello">
+          <div class="etichetta-piccola">Giudizio di Claude</div>
+          <p id="c-giudizio" class="giudizio"></p>
+          <ul id="c-problemi" class="problemi"></ul>
+        </div>
+        <div class="pannello" id="c-correzioni-box" hidden>
+          <div class="etichetta-piccola">Correzioni rapide (circa 0,10 € l'una)</div>
+          <div id="c-correzioni" class="correzioni"></div>
+          <div class="correzione-libera">
+            <input id="c-testo-correzione" type="text" placeholder="Oppure scrivi tu la correzione…">
+            <button id="c-invia-correzione" class="bottone">Invia</button>
+          </div>
+        </div>
+        <div class="pannello numeri">
+          <div><span>Costo</span><strong id="c-costo">—</strong><small id="c-costo-dett"></small></div>
+          <div><span>Tempo</span><strong id="c-tempo">—</strong><small id="c-tentativi"></small></div>
+          <div><span>Modalità</span><strong id="c-modalita">—</strong><small id="c-file"></small></div>
+        </div>
+      </aside>
+    </div>
+  </template>
+
+  <template id="t-catalogo">
+    <section class="intestazione">
+      <h1>Il mio catalogo</h1>
+      <p>I prodotti veri che usi nei progetti: misure reali, foto e modello 3D. Nel render vengono messi esattamente a quelle misure.</p>
+    </section>
+    <div class="griglia-catalogo">
+      <form id="cat-modulo" class="pannello colonna">
+        <h2>Aggiungi al catalogo</h2>
+        <div class="interruttore" id="cat-tipo">
+          <button type="button" data-tipo="prodotto" class="attivo">Prodotto 3D</button>
+          <button type="button" data-tipo="piastrella">Piastrella / materiale</button>
+        </div>
+        <input type="hidden" name="tipo" value="prodotto">
+        <div class="foto-tipo" data-solo="piastrella" hidden>
+          <span class="etichetta-piccola">La foto mostra…</span>
+          <label class="scelta-foto"><input type="radio" name="foto_tipo" value="piastrella" checked>
+            <span><b>Una piastrella sola</b><small>Es. 60×60, 30×60: il programma la posa con fughe e posa scelta</small></span></label>
+          <label class="scelta-foto"><input type="radio" name="foto_tipo" value="superficie">
+            <span><b>Una superficie già posata</b><small>Parquet, SPC, resina, lastre: la texture del produttore con più pezzi</small></span></label>
+        </div>
+        <label>Nome<input name="nome" required placeholder="Es. Vasca freestanding Ovale 170"></label>
+        <label data-solo="prodotto">Categoria<select name="categoria" id="cat-categoria"></select></label>
+        <div class="cat-misure">
+          <label><span data-etichetta="larghezza">Larghezza</span><span><input name="larghezza" type="number" min="1" required> cm</span></label>
+          <label><span data-etichetta="profondita">Profondità</span><span><input name="profondita" type="number" min="1" required> cm</span></label>
+          <label><span data-etichetta="altezza">Altezza</span><span><input name="altezza" type="number" min="0" required> cm</span></label>
+          <label data-solo="prodotto">Da terra<span><input name="quota" type="number" min="0" value="0"> cm</span></label>
+        </div>
+        <p class="sottile" id="cat-spiega-misure">Le misure vere del prodotto (dalla scheda tecnica): il modello 3D viene portato esattamente a queste misure.
+          "Da terra" serve per i prodotti sospesi (es. mobile lavabo a 30 cm).</p>
+        <div class="cat-misure" data-solo="piastrella" hidden>
+          <label>Finitura<select name="finitura" id="cat-finitura"></select></label>
+          <label data-solo-foto="piastrella">Fuga<span><input name="fuga_mm" type="number" min="0" max="15" value="2"> mm</span></label>
+          <label data-solo-foto="piastrella">Colore fuga<input name="fuga_colore" type="color" value="#b9b2a6"></label>
+          <label data-solo-foto="piastrella">Posa<select name="posa" id="cat-posa"></select></label>
+        </div>
+        <div class="cat-file">
+          <label class="cat-zona" id="cat-zona-foto">📷 <b data-etichetta="foto">Foto del prodotto</b><span id="cat-nome-foto">JPG o PNG, su sfondo il più possibile neutro</span>
+            <input name="foto" type="file" accept="image/jpeg,image/png,image/webp" hidden></label>
+          <label class="cat-zona" id="cat-zona-modello" data-solo="prodotto">🧊 <b>Modello 3D</b> (facoltativo)<span id="cat-nome-modello">GLB, GLTF, OBJ o FBX del produttore</span>
+            <input name="modello" type="file" accept=".glb,.gltf,.obj,.fbx" hidden></label>
+        </div>
+        <details>
+          <summary>Dati commerciali (facoltativi)</summary>
+          <label>Fornitore<input name="fornitore"></label>
+          <label>Codice<input name="codice"></label>
+          <label>Prezzo<input name="prezzo" placeholder="Es. 890 € oppure 45 €/m²"></label>
+          <label>Nota<input name="nota" placeholder="Finitura, colore…"></label>
+        </details>
+        <button class="bottone primario" type="submit">Salva nel catalogo</button>
+        <p id="cat-errore" class="errore" hidden></p>
+      </form>
+      <div class="colonna">
+        <div class="cat-testa"><h2>Prodotti</h2><span class="sottile" id="cat-conta"></span></div>
+        <div id="cat-meshy" class="avviso-misure" hidden></div>
+        <div id="cat-lista" class="cat-lista"></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="t-progetti">
+    <section class="intestazione">
+      <h1>Progetti</h1>
+      <p>Lo storico di tutti i lavori, con risultato, voto e costo.</p>
+    </section>
+    <div id="elenco" class="elenco"></div>
+  </template>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pannellum/2.5.6/pannellum.js"></script>
+  <!-- visore 3D dei modelli del catalogo (GLB/GLTF) nella scheda prodotto -->
+  <script type="module" src="https://unpkg.com/@google/model-viewer@3.5.0/dist/model-viewer.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
